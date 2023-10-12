@@ -9,18 +9,23 @@ on:
       - patch
 
 concurrency:
-  group: cd
+  group: release
   cancel-in-progress: false
 
 jobs:
 
-  ci:
-    uses: ./.github/workflows/ci.yaml
+  format:
+    uses: ./.github/workflows/format-stage.yaml
     secrets: inherit
-
-  cd:
+  
+  test:
+    uses: ./.github/workflows/test-stage.yaml
+    secrets: inherit
+  
+  release:
     needs:
-      - ci
+      - format
+      - test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
