@@ -1,12 +1,7 @@
 name: Release the lib to Hackage
 
 on:
-  push:
-    branches:
-      - supermajor
-      - major
-      - minor
-      - patch
+  workflow_call:
 
 concurrency:
   group: release
