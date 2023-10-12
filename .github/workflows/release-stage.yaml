@@ -5,6 +5,15 @@ on:
     secrets:
       hackage-token:
         required: true
+    inputs:
+      prefix-tag-with-v:
+        type: boolean
+        default: true
+        required: false
+      master-branch:
+        type: string
+        default: master
+        required: false
 
 concurrency:
   group: release
@@ -33,5 +42,5 @@ jobs:
         with:
           hackage-token: ${{ secrets.hackage-token }}
           version-bump-place: ${{ fromJSON('{"supermajor":0,"major":1,"minor":2,"patch":3}')[github.ref_name] }}
-          main-branch: master
-          prefix-tag-with-v: true
+          main-branch: ${{ inputs.master-branch }}
+          prefix-tag-with-v: ${{ inputs.prefix-tag-with-v }}
