@@ -46,7 +46,7 @@ jobs:
           restore-keys: ${{ env.key }}-
           
       - name: Install dependencies
-        run: cabal build all --only-dependencies --enable-tests --enable-benchmarks --haddock-html -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
+        run: cabal build all --only-dependencies --enable-tests --enable-benchmarks --enable-documentation -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ matrix.ghc-options }}"
 
       - name: Save dependencies cache
         uses: actions/cache/save@v3
