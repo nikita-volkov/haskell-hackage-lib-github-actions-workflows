@@ -3,7 +3,7 @@ name: Release the lib to Hackage
 on:
   workflow_call:
     secrets:
-      hackage-token:
+      HACKAGE_TOKEN:
         required: true
     inputs:
       prefix-tag-with-v:
@@ -40,7 +40,7 @@ jobs:
       - name: Release
         uses: nikita-volkov/release-haskell-package.github-action@v1.2.0
         with:
-          hackage-token: ${{ secrets.hackage-token }}
+          hackage-token: ${{ secrets.HACKAGE_TOKEN }}
           version-bump-place: ${{ fromJSON('{"supermajor":0,"major":1,"minor":2,"patch":3}')[github.ref_name] }}
           main-branch: ${{ inputs.master-branch }}
           prefix-tag-with-v: ${{ inputs.prefix-tag-with-v }}
