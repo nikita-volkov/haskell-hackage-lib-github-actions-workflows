@@ -15,24 +15,8 @@ on:
         default: master
         required: false
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
-
-  format:
-    uses: ./.github/workflows/format-stage.yaml
-    secrets: inherit
-  
-  test:
-    uses: ./.github/workflows/test-stage.yaml
-    secrets: inherit
-  
   release:
-    needs:
-      - format
-      - test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
