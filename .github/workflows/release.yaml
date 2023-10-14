@@ -22,7 +22,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Release
-        uses: nikita-volkov/release-haskell-package.github-action@1baa1fe08db93023cb1b1ac65444bb180ff6d470
+        uses: nikita-volkov/release-haskell-package.github-action@v1.2.1
         with:
           hackage-token: ${{ secrets.HACKAGE_TOKEN }}
           version-bump-place: ${{ fromJSON('{"supermajor":0,"major":1,"minor":2,"patch":3}')[github.ref_name] }}
