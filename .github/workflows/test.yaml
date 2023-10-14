@@ -2,6 +2,11 @@ name: Compile, test and check the docs
 
 on:
   workflow_call:
+    inputs:
+      minimal-ghc:
+        type: string
+        default: "8.8.1"
+        required: false
 
 jobs:
 
@@ -11,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - ghc: '8.8.1'
+          - ghc: ${{ inputs.minimal-ghc }}
           - ghc: latest
             ghc-options: -Werror -Wall -Wincomplete-uni-patterns -Wincomplete-record-updates -Wredundant-constraints -Wunused-packages -Wno-name-shadowing -Wno-unused-matches -Wno-unused-do-bind -Wno-type-defaults
 
