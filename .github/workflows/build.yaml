@@ -11,6 +11,10 @@ on:
         description: Extra GHC options to pass to cabal build and cabal test.
         type: string
         default: ""
+      test-options:
+        description: Extra CLI options to pass to the test suite.
+        type: string
+        default: ""
       cabal-configure-extra-args:
         description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text < 2\"".
         type: string
@@ -88,7 +92,11 @@ jobs:
       - name: Test
         if: ${{ !inputs.skip-tests }}
         shell: bash
-        run: cabal test all --test-show-details streaming -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
+        run: >
+          cabal test all --test-show-details streaming -j
+          +RTS -A128m -n2m -N -RTS
+          --ghc-options="${{ inputs.ghc-options }}"
+          --test-options="${{ inputs.test-options }}"
 
       - name: Extract metadata from cabal file
         if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
