@@ -1,0 +1,18 @@
+name: Run "cabal check" with the latest setup
+
+on:
+  workflow_call:
+
+jobs:
+  cabal-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up build tools
+        id: setup
+        uses: haskell-actions/setup@v2
+
+      - name: Check cabal file
+        shell: bash
+        run: cabal check

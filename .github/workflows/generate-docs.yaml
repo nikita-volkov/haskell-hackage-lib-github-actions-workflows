@@ -1,0 +1,48 @@
+name: Run "cabal haddock" with the latest setup
+
+on:
+  workflow_call:
+
+jobs:
+  haddock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up build tools
+        id: setup
+        uses: haskell-actions/setup@v2
+
+      - name: Configure
+        shell: bash
+        run: >
+          cabal configure --enable-documentation
+
+      - name: Generate the plan
+        shell: bash
+        run: cabal build all --dry-run
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: ${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}-${{ github.job }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}
+
+      - name: Install dependencies
+        shell: bash
+        run: cabal build all --only-dependencies -j +RTS -A128m -n2m -N -RTS
+
+      - name: Save dependencies cache
+        uses: actions/cache/save@v4
+        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Build docs
+        shell: bash
+        run: cabal haddock -j +RTS -A128m -n2m -N -RTS
