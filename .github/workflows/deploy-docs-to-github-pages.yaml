@@ -26,11 +26,11 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: cabal configure --enable-documentation --haddock-for-hackage
+        run: cabal configure --enable-documentation
 
       - name: Generate the plan
         shell: bash
-        run: cabal build all --enable-documentation --haddock-for-hackage --dry-run
+        run: cabal build all --enable-documentation --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v4
@@ -42,9 +42,9 @@ jobs:
           key: ${{ env.key }}-${{ hashFiles('**/plan.json') }}
           restore-keys: ${{ env.key }}
 
-      - name: Install dependencies
+      - name: Build docs
         shell: bash
-        run: cabal build all --enable-documentation --haddock-for-hackage --only-dependencies -j +RTS -A128m -n2m -N -RTS
+        run: cabal haddock-project --hackage
 
       - name: Save dependencies cache
         uses: actions/cache/save@v4
@@ -52,10 +52,6 @@ jobs:
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache.outputs.cache-primary-key }}
-
-      - name: Build docs
-        shell: bash
-        run: cabal haddock-project --hackage
 
       - name: Add .nojekyll (avoid Jekyll processing)
         run: touch haddocks/.nojekyll
