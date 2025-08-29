@@ -23,13 +23,13 @@ jobs:
   release:
     runs-on: ubuntu-latest
     environment:
-      name: Hackage
-      # TODO: Determine the release URL on Hackage and put here:
-      # url: ...
+      name: hackage
+      url: ${{ steps.release.outputs.hackage-url }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Release
+        id: release
         uses: nikita-volkov/release-haskell-package.github-action@v1
         with:
           hackage-token: ${{ secrets.HACKAGE_TOKEN }}
