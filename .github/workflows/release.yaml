@@ -22,6 +22,10 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment:
+      name: Hackage
+      # TODO: Determine the release URL on Hackage and put here:
+      # url: ...
     steps:
       - uses: actions/checkout@v4
 
