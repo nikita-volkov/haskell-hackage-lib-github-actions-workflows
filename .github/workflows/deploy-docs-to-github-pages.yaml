@@ -92,7 +92,7 @@ jobs:
 
           # Find all HTML files and replace the footer (using Linux sed syntax)
           find haddocks -name "*.html" -type f -exec sed -i \
-            "s|<div id=\"footer\"><p>Produced by <a href=\"http://www.haskell.org/haddock/\">Haddock</a> version 2.30.0</p></div>|<div id=\"footer\"><p>Produced from commit <a href=\"${REPO_URL}\">${COMMIT_HASH:0:7}</a> by <a href=\"http://www.haskell.org/haddock/\">Haddock</a> version 2.30.0</p></div>|g" {} \;
+            "s|<div id=\"footer\"><p>Produced by <a href=\"http://www.haskell.org/haddock/\">Haddock</a>|<div id=\"footer\"><p>Produced from commit <a href=\"${REPO_URL}\">${COMMIT_HASH:0:7}</a> by <a href=\"http://www.haskell.org/haddock/\">Haddock</a>|g" {} \;
 
       - name: Add .nojekyll (avoid Jekyll processing)
         run: touch haddocks/.nojekyll
