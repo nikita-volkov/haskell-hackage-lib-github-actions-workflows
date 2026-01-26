@@ -14,32 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore cached GHCup installations
-        uses: actions/cache/restore@v4
-        id: ghcup-cache
-        with:
-          path: |
-            ~/.ghcup
-            /usr/local/.ghcup
-            /home/runner/.ghcup
-          key: ghcup-${{ runner.os }}-${{ inputs.ghc }}
-          restore-keys: ghcup-${{ runner.os }}-
-
       - name: Set up build tools
         id: setup
         uses: haskell-actions/setup@v2
         with:
           ghc-version: ${{ inputs.ghc }}
-
-      - name: Save GHCup installations cache
-        uses: actions/cache/save@v4
-        if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
-        with:
-          path: |
-            ~/.ghcup
-            /usr/local/.ghcup
-            /home/runner/.ghcup
-          key: ghcup-${{ runner.os }}-${{ inputs.ghc }}
 
       - name: Check cabal file
         shell: bash
