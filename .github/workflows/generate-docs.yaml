@@ -18,7 +18,10 @@ jobs:
         uses: actions/cache/restore@v4
         id: ghcup-cache
         with:
-          path: ~/.ghcup
+          path: |
+            ~/.ghcup
+            /usr/local/.ghcup
+            /home/runner/.ghcup
           key: ghcup-${{ runner.os }}-${{ inputs.ghc }}
           restore-keys: ghcup-${{ runner.os }}-
 
@@ -32,7 +35,10 @@ jobs:
         uses: actions/cache/save@v4
         if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
         with:
-          path: ~/.ghcup
+          path: |
+            ~/.ghcup
+            /usr/local/.ghcup
+            /home/runner/.ghcup
           key: ghcup-${{ runner.os }}-${{ inputs.ghc }}
 
       - name: Configure
