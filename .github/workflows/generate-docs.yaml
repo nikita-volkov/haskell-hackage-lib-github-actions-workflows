@@ -1,4 +1,4 @@
-name: Run "cabal haddock" with the latest setup
+name: Generate Haddock documentation and upload as artifact
 
 on:
   workflow_call:
@@ -7,6 +7,10 @@ on:
         description: GHC version to use. For example, "8.10.7" or "latest".
         type: string
         default: latest
+      artifact-name:
+        description: Name of the artifact to upload containing the generated documentation.
+        type: string
+        default: haddock
 
 jobs:
   haddock:
@@ -22,26 +26,25 @@ jobs:
 
       - name: Configure
         shell: bash
-        run: >
-          cabal configure --enable-documentation
+        run: cabal configure --enable-documentation
 
       - name: Generate the plan
         shell: bash
-        run: cabal build all --dry-run
+        run: cabal build all --enable-documentation --dry-run
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v4
         id: cache
         env:
-          key: ${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}-${{ github.job }}
+          key: ${{ github.workflow }}-${{ github.job }}-${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}-${{ github.job }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-${{ hashFiles('**/plan.json') }}
           restore-keys: ${{ env.key }}
 
-      - name: Install dependencies
+      - name: Build docs
         shell: bash
-        run: cabal build all --only-dependencies -j +RTS -A128m -n2m -N -RTS
+        run: cabal haddock-project --hackage
 
       - name: Save dependencies cache
         uses: actions/cache/save@v4
@@ -50,6 +53,32 @@ jobs:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
-      - name: Build docs
+      - name: Enrich documentation footers
         shell: bash
-        run: cabal haddock -j +RTS -A128m -n2m -N -RTS
+        run: |
+          COMMIT_HASH="${{ github.sha }}"
+          REPO_URL="https://github.com/${{ github.repository }}/tree/${COMMIT_HASH}"
+
+          # Ensure haddocks directory exists
+          if [ ! -d "haddocks" ]; then
+            echo "ERROR: haddocks directory not found. Documentation build may have failed."
+            exit 1
+          fi
+
+          # Ensure there are HTML files to process
+          if [ "$(find haddocks -name "*.html" -type f | wc -l)" -eq 0 ]; then
+            echo "ERROR: No HTML files found in haddocks directory. Documentation generation may have failed."
+            exit 1
+          fi
+
+          # Find all HTML files and replace the footer (using Linux sed syntax)
+          find haddocks -name "*.html" -type f -exec sed -i \
+            "s|<div id=\"footer\"><p>Produced by <a href=\"http://www.haskell.org/haddock/\">Haddock</a>|<div id=\"footer\"><p>Produced from commit <a href=\"${REPO_URL}\">${COMMIT_HASH:0:7}</a> by <a href=\"http://www.haskell.org/haddock/\">Haddock</a>|g" {} \;
+
+      - name: Add .nojekyll (avoid Jekyll processing)
+        run: touch haddocks/.nojekyll
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.artifact-name }}
+          path: haddocks
