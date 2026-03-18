@@ -57,11 +57,10 @@ jobs:
           ${{ inputs.cabal-configure-extra-args }}
 
       - name: Generate the plan
-        shell: bash
-        run: cabal build all --dry-run
+        run: cabal build all --dry-run --enable-tests
 
       - name: Restore cached dependencies
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v5
         id: cache
         env:
           key: ${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}-${{ github.job }}
@@ -72,14 +71,14 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: cabal build all --only-dependencies -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
+        run: cabal build all --only-dependencies --enable-tests -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
 
       - name: Install doctest
         if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
         run: cabal install doctest --overwrite-policy=always
 
       - name: Save dependencies cache
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v5
         if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
