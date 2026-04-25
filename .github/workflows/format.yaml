@@ -11,7 +11,7 @@ jobs:
       - name: Checkout the source
         uses: actions/checkout@v6
       - name: Format Cabal
-        uses: nikita-volkov/cabal-gild.github-action@v3
+        uses: nikita-volkov/cabal-gild.github-action@v4
       - name: Format haskell
         uses: nikita-volkov/ormolu.github-action@v3
       - name: Commit the changes
