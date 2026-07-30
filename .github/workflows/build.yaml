@@ -31,6 +31,15 @@ on:
         description: Skip building benchmarks. For now they don't get executed either way.
         type: boolean
         default: false
+      doctest-target:
+        description: >
+          Cabal target to run doctest against. Defaults to the package name (its main
+          library). Override this for packages that split their code into an internal
+          sublibrary depended-on by the main library, since doctest cannot build a local
+          sublibrary dependency (only repl into it directly) — e.g. set this to
+          "mypackage:internal".
+        type: string
+        default: ""
 
 jobs:
   compile-and-test:
@@ -105,4 +114,6 @@ jobs:
       - name: Run doctests
         if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
         shell: bash
-        run: cabal repl --with-compiler=doctest ${{ steps.cabal-metadata.outputs.name }}
+        run: >
+          cabal repl --with-compiler=doctest
+          ${{ inputs.doctest-target != '' && inputs.doctest-target || steps.cabal-metadata.outputs.name }}
