@@ -80,7 +80,7 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: cabal build all --only-dependencies --enable-tests -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
+        run: cabal build all --only-dependencies --enable-tests -j +RTS -A128m -n2m -N -RTS --ghc-options="-j ${{ inputs.ghc-options }}"
 
       - name: Install doctest
         if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
