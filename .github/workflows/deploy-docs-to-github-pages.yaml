@@ -48,7 +48,7 @@ jobs:
 
       - name: Build docs
         shell: bash
-        run: cabal haddock-project --hackage
+        run: cabal haddock-project --hackage --ghc-options=-j
 
       - name: Save dependencies cache
         uses: actions/cache/save@v4
