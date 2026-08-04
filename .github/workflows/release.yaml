@@ -103,11 +103,16 @@ jobs:
           commit_message: Set package version to ${{ steps.detect.outputs.version }}
           file_pattern: "*.cabal CHANGELOG.md"
 
-      - name: Create release tag
+      - name: Create GitHub release
         if: steps.detect.outputs.ready == 'true' && steps.detect.outputs.candidate != 'true'
-        uses: mathieudutour/github-tag-action@v6.1
+        uses: softprops/action-gh-release@v2
         with:
-          github_token: ${{ github.token }}
-          custom_tag: ${{ steps.detect.outputs.version }}
-          tag_prefix: v
-          commit_sha: ${{ steps.commit.outputs.commit_hash }}
+          tag_name: v${{ steps.detect.outputs.version }}
+          name: v${{ steps.detect.outputs.version }}
+          body: ${{ steps.detect.outputs.notes }}
+          target_commitish: ${{ steps.commit.outputs.commit_hash }}
+          files: dist-newstyle/sdist/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
