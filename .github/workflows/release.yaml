@@ -7,6 +7,10 @@ on:
         description: Build Haddock and upload it to Hackage alongside the source dist.
         type: boolean
         default: false
+      release-candidate:
+        description: Publish as a Hackage release candidate instead of a permanent release.
+        type: boolean
+        default: false
     secrets:
       HACKAGE_TOKEN:
         required: false
@@ -57,7 +61,7 @@ jobs:
           set-value: ${{ steps.detect.outputs.version }}
 
       - name: Prepend a fresh Upcoming section to the changelog
-        if: steps.detect.outputs.ready == 'true'
+        if: steps.detect.outputs.ready == 'true' && !inputs.release-candidate
         run: |
           set -euo pipefail
           printf '# Upcoming\n\n' | cat - CHANGELOG.md > CHANGELOG.md.new
@@ -69,7 +73,12 @@ jobs:
         run: |
           cabal_file=$(find . -maxdepth 1 -name "*.cabal" -print -quit)
           package_name=$(awk -F ":[[:space:]]*" 'tolower($1)=="name" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2 }' < "$cabal_file")
-          echo "url=https://hackage.haskell.org/package/${package_name}-${{ steps.detect.outputs.version }}" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.release-candidate }}" = "true" ]; then
+            url="https://hackage.haskell.org/package/${package_name}/candidates"
+          else
+            url="https://hackage.haskell.org/package/${package_name}-${{ steps.detect.outputs.version }}"
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
 
       - name: Generate source distribution
         if: steps.detect.outputs.ready == 'true'
@@ -80,7 +89,7 @@ jobs:
         uses: haskell-actions/hackage-publish@v1.1
         with:
           hackageToken: ${{ secrets.HACKAGE_TOKEN }}
-          publish: true
+          publish: ${{ !inputs.release-candidate }}
           docsPath: dist-newstyle
 
       - name: Publish on Hackage
@@ -88,10 +97,10 @@ jobs:
         uses: haskell-actions/hackage-publish@v1.1
         with:
           hackageToken: ${{ secrets.HACKAGE_TOKEN }}
-          publish: true
+          publish: ${{ !inputs.release-candidate }}
 
       - name: Commit the version update
-        if: steps.detect.outputs.ready == 'true'
+        if: steps.detect.outputs.ready == 'true' && !inputs.release-candidate
         id: commit
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
@@ -99,7 +108,7 @@ jobs:
           file_pattern: "*.cabal CHANGELOG.md"
 
       - name: Create release tag
-        if: steps.detect.outputs.ready == 'true'
+        if: steps.detect.outputs.ready == 'true' && !inputs.release-candidate
         uses: mathieudutour/github-tag-action@v6.1
         with:
           github_token: ${{ github.token }}
