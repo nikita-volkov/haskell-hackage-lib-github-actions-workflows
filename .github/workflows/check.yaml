@@ -33,7 +33,6 @@ jobs:
       ghc: ${{ inputs.ghc-oldest }}
       skip-benchmarks: true
       skip-doctest: true
-      test-options: --qc-max-success=100
 
   build-with-latest:
     uses: ./.github/workflows/build.yaml
