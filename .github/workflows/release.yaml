@@ -69,7 +69,7 @@ jobs:
         run: |
           cabal_file=$(find . -maxdepth 1 -name "*.cabal" -print -quit)
           package_name=$(awk -F ":[[:space:]]*" 'tolower($1)=="name" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2 }' < "$cabal_file")
-          echo "url=https://hackage.haskell.org/package/${package_name}-${{ steps.detect.outputs.version }}" >> "$GITHUB_OUTPUT}"
+          echo "url=https://hackage.haskell.org/package/${package_name}-${{ steps.detect.outputs.version }}" >> "$GITHUB_OUTPUT"
 
       - name: Generate source distribution
         if: steps.detect.outputs.ready == 'true'
