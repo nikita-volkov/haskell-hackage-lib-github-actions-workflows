@@ -23,6 +23,10 @@ on:
         description: Extra options passed to the test suite on the latest build.
         type: string
         default: ""
+      release-candidate:
+        description: Publish as a Hackage release candidate instead of a permanent release.
+        type: boolean
+        default: false
     secrets:
       HACKAGE_TOKEN:
         required: false
@@ -77,3 +81,4 @@ jobs:
     secrets: inherit
     with:
       upload-docs: ${{ inputs.upload-docs }}
+      release-candidate: ${{ inputs.release-candidate }}
