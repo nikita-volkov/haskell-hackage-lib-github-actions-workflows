@@ -76,7 +76,7 @@ jobs:
 
   release:
     if: github.event_name == 'push'
-    needs: check
+    needs: [check, format]
     uses: ./.github/workflows/release.yaml
     secrets: inherit
     with:
