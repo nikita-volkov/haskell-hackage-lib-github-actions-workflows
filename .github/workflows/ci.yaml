@@ -1,0 +1,79 @@
+name: CI
+
+on:
+  workflow_call:
+    inputs:
+      ghc-oldest:
+        description: Oldest GHC version to build with (e.g. "8.10").
+        type: string
+        default: "8.10"
+      ghc-latest:
+        description: Latest GHC version to build with (e.g. "latest").
+        type: string
+        default: latest
+      doctest:
+        description: Whether to run doctests on the latest build.
+        type: boolean
+        default: false
+      upload-docs:
+        description: Build Haddock and upload it to Hackage on release.
+        type: boolean
+        default: false
+      test-options:
+        description: Extra options passed to the test suite on the latest build.
+        type: string
+        default: ""
+    secrets:
+      HACKAGE_TOKEN:
+        required: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+
+  check:
+    uses: ./.github/workflows/check.yaml
+    secrets: inherit
+    concurrency:
+      group: check-${{ github.ref }}
+      cancel-in-progress: true
+    with:
+      ghc-oldest: ${{ inputs.ghc-oldest }}
+      ghc-latest: ${{ inputs.ghc-latest }}
+      doctest: ${{ inputs.doctest }}
+      test-options: ${{ inputs.test-options }}
+
+  generate-docs:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/generate-docs.yaml
+    secrets: inherit
+    concurrency:
+      group: generate-docs-${{ github.ref }}
+      cancel-in-progress: true
+
+  format:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/format.yaml
+    secrets: inherit
+    concurrency:
+      group: format-${{ github.ref }}
+      cancel-in-progress: false
+
+  deploy-docs:
+    if: github.event_name == 'push'
+    uses: ./.github/workflows/deploy-docs-to-github-pages.yaml
+    secrets: inherit
+    concurrency:
+      group: deploy-docs-${{ github.ref }}
+      cancel-in-progress: false
+
+  release:
+    if: github.event_name == 'push'
+    needs: check
+    uses: ./.github/workflows/release.yaml
+    secrets: inherit
+    with:
+      upload-docs: ${{ inputs.upload-docs }}

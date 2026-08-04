@@ -1,39 +1,108 @@
-name: Release the lib to Hackage
+name: Release to Hackage
 
 on:
   workflow_call:
-    secrets:
-      HACKAGE_TOKEN:
-        required: true
     inputs:
-      prefix-tag-with-v:
-        type: boolean
-        default: true
-        required: false
-      master-branch:
-        type: string
-        default: master
-        required: false
-      docs:
+      upload-docs:
+        description: Build Haddock and upload it to Hackage alongside the source dist.
         type: boolean
         default: false
+    secrets:
+      HACKAGE_TOKEN:
         required: false
 
+permissions:
+  contents: write
+
 jobs:
-  release:
+
+  detect:
     runs-on: ubuntu-latest
-    environment:
-      name: hackage
-      url: ${{ steps.release.outputs.hackage-url }}
+    outputs:
+      ready: ${{ steps.detect.outputs.ready }}
+      version: ${{ steps.detect.outputs.version }}
     steps:
       - uses: actions/checkout@v6
-
-      - name: Release
-        id: release
-        uses: nikita-volkov/release-haskell-package.github-action@v1
         with:
-          hackage-token: ${{ secrets.HACKAGE_TOKEN }}
-          version-bump-place: ${{ fromJSON('{"supermajor":0,"major":1,"minor":2,"patch":3}')[github.ref_name] }}
-          main-branch: ${{ inputs.master-branch }}
-          prefix-tag-with-v: ${{ inputs.prefix-tag-with-v }}
-          docs: ${{ inputs.docs }}
+          fetch-depth: 0
+
+      - name: Detect the version to release
+        id: detect
+        uses: nikita-volkov/changelog-driven-release.github-action@v1
+
+  release:
+    needs: detect
+    if: needs.detect.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    environment:
+      name: hackage
+      url: ${{ steps.generate-hackage-url.outputs.url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Re-detect the version to release (under the lock)
+        id: detect
+        uses: nikita-volkov/changelog-driven-release.github-action@v1
+
+      - name: Set package version
+        if: steps.detect.outputs.ready == 'true'
+        uses: nikita-volkov/edit-cabal-version.github-action@v1
+        with:
+          mode: set
+          set-value: ${{ steps.detect.outputs.version }}
+
+      - name: Prepend a fresh Upcoming section to the changelog
+        if: steps.detect.outputs.ready == 'true'
+        run: |
+          set -euo pipefail
+          printf '# Upcoming\n\n' | cat - CHANGELOG.md > CHANGELOG.md.new
+          mv CHANGELOG.md.new CHANGELOG.md
+
+      - name: Extract package name and generate Hackage URL
+        if: steps.detect.outputs.ready == 'true'
+        id: generate-hackage-url
+        run: |
+          cabal_file=$(find . -maxdepth 1 -name "*.cabal" -print -quit)
+          package_name=$(awk -F ":[[:space:]]*" 'tolower($1)=="name" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2 }' < "$cabal_file")
+          echo "url=https://hackage.haskell.org/package/${package_name}-${{ steps.detect.outputs.version }}" >> "$GITHUB_OUTPUT}"
+
+      - name: Generate source distribution
+        if: steps.detect.outputs.ready == 'true'
+        run: cabal sdist
+
+      - name: Publish on Hackage (with docs)
+        if: steps.detect.outputs.ready == 'true' && inputs.upload-docs
+        uses: haskell-actions/hackage-publish@v1.1
+        with:
+          hackageToken: ${{ secrets.HACKAGE_TOKEN }}
+          publish: true
+          docsPath: dist-newstyle
+
+      - name: Publish on Hackage
+        if: steps.detect.outputs.ready == 'true' && !inputs.upload-docs
+        uses: haskell-actions/hackage-publish@v1.1
+        with:
+          hackageToken: ${{ secrets.HACKAGE_TOKEN }}
+          publish: true
+
+      - name: Commit the version update
+        if: steps.detect.outputs.ready == 'true'
+        id: commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Set package version to ${{ steps.detect.outputs.version }}
+          file_pattern: "*.cabal CHANGELOG.md"
+
+      - name: Create release tag
+        if: steps.detect.outputs.ready == 'true'
+        uses: mathieudutour/github-tag-action@v6.1
+        with:
+          github_token: ${{ github.token }}
+          custom_tag: ${{ steps.detect.outputs.version }}
+          tag_prefix: v
+          commit_sha: ${{ steps.commit.outputs.commit_hash }}

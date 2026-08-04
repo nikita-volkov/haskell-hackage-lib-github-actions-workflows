@@ -1,0 +1,44 @@
+name: Compile and test
+
+on:
+  workflow_call:
+    inputs:
+      ghc-oldest:
+        description: Oldest GHC version to build with (e.g. "8.10").
+        type: string
+        default: "8.10"
+      ghc-latest:
+        description: Latest GHC version to build with (e.g. "latest").
+        type: string
+        default: latest
+      doctest:
+        description: Whether to run doctests on the latest build.
+        type: boolean
+        default: false
+      test-options:
+        description: Extra options passed to the test suite on the latest build.
+        type: string
+        default: ""
+
+jobs:
+
+  check-cabal:
+    uses: ./.github/workflows/check-cabal.yaml
+    secrets: inherit
+
+  build-with-oldest:
+    uses: ./.github/workflows/build.yaml
+    secrets: inherit
+    with:
+      ghc: ${{ inputs.ghc-oldest }}
+      skip-benchmarks: true
+      skip-doctest: true
+      test-options: --qc-max-success=100
+
+  build-with-latest:
+    uses: ./.github/workflows/build.yaml
+    secrets: inherit
+    with:
+      ghc: ${{ inputs.ghc-latest }}
+      skip-doctest: ${{ !inputs.doctest }}
+      test-options: ${{ inputs.test-options }}
