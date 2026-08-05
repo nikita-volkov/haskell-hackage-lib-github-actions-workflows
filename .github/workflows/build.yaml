@@ -1,56 +1,87 @@
-name: Compile, test and check a Haskell package
+name: Build
 
 on:
   workflow_call:
     inputs:
-      ghc:
-        description: GHC version to use. For example, "8.10.7" or "latest".
+      ghc-oldest:
+        description: Oldest GHC version to build with (e.g. "8.10").
+        type: string
+        default: "8.10"
+      ghc-latest:
+        description: Latest GHC version to build with (e.g. "latest").
         type: string
         default: latest
-      ghc-options:
-        description: Extra GHC options to pass to cabal build and cabal test.
-        type: string
-        default: ""
+      doctest:
+        description: Whether to run doctests on the latest build.
+        type: boolean
+        default: false
       test-options:
-        description: Extra CLI options to pass to the test suite.
+        description: Extra options passed to the test suite on the latest build.
         type: string
         default: ""
-      cabal-configure-extra-args:
-        description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text < 2\"".
+      ghc:
+        description: GHC version to use for the source distribution and Haddock generation. For example, "8.10.7" or "latest".
         type: string
-        default: ""
-      skip-tests:
-        description: Skip building and running all tests including doctest.
-        type: boolean
-        default: false
-      skip-doctest:
-        description: Skip building and running doctests.
-        type: boolean
-        default: false
-      skip-benchmarks:
-        description: Skip building benchmarks. For now they don't get executed either way.
-        type: boolean
-        default: false
-      doctest-target:
-        description: >
-          Cabal target to run doctest against. Defaults to the package name (its main
-          library). Override this for packages that split their code into an internal
-          sublibrary depended-on by the main library, since doctest cannot build a local
-          sublibrary dependency (only repl into it directly) — e.g. set this to
-          "mypackage:internal".
+        default: latest
+      version:
+        description: Version to set in the .cabal file before generating the source distribution and Haddock docs (e.g. for a release). Leave empty to build with whatever version is already in the tree.
         type: string
         default: ""
 
 jobs:
-  compile-and-test:
-    strategy:
-      fail-fast: false
 
+  check-cabal:
+    uses: ./.github/workflows/check-cabal.yaml
+    secrets: inherit
+
+  build-with-oldest:
+    uses: ./.github/workflows/compile-and-test.yaml
+    secrets: inherit
+    with:
+      ghc: ${{ inputs.ghc-oldest }}
+      skip-benchmarks: true
+      skip-doctest: true
+
+  build-with-latest:
+    uses: ./.github/workflows/compile-and-test.yaml
+    secrets: inherit
+    with:
+      ghc: ${{ inputs.ghc-latest }}
+      skip-doctest: ${{ !inputs.doctest }}
+      test-options: ${{ inputs.test-options }}
+
+  sdist:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
 
+      - name: Set package version
+        if: inputs.version != ''
+        uses: nikita-volkov/edit-cabal-version.github-action@v1
+        with:
+          mode: set
+          set-value: ${{ inputs.version }}
+
+      - name: Set up build tools
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ inputs.ghc }}
+
+      - name: Generate source distribution
+        shell: bash
+        run: cabal sdist
+
+      - name: Upload the source distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist-newstyle/sdist/*.tar.gz
+
+  haddock:
+    runs-on: ubuntu-latest
     steps:
       - name: Restore cached GHC toolchain
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v4
         id: ghcup-cache
         with:
           path: ~/.ghcup
@@ -63,7 +94,7 @@ jobs:
           ghc-version: ${{ inputs.ghc }}
 
       - name: Save GHC toolchain cache
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v4
         if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
         with:
           path: ~/.ghcup
@@ -71,63 +102,102 @@ jobs:
 
       - uses: actions/checkout@v6
 
+      - name: Set package version
+        if: inputs.version != ''
+        uses: nikita-volkov/edit-cabal-version.github-action@v1
+        with:
+          mode: set
+          set-value: ${{ inputs.version }}
+
       - name: Configure
         shell: bash
-        run: >
-          cabal configure
-          ${{ !inputs.skip-tests && '--enable-tests' || '' }}
-          ${{ !inputs.skip-benchmarks && '--enable-benchmarks' || '' }}
-          ${{ inputs.cabal-configure-extra-args }}
+        run: cabal configure --enable-documentation
 
       - name: Generate the plan
-        run: cabal build all --dry-run --enable-tests
+        shell: bash
+        run: cabal build all --enable-documentation --dry-run
 
       - name: Restore cached dependencies
-        uses: actions/cache/restore@v5
+        uses: actions/cache/restore@v4
         id: cache
         env:
-          key: ${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}-${{ github.job }}
+          key: build-haddock-${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-${{ hashFiles('**/plan.json') }}
           restore-keys: ${{ env.key }}
 
-      - name: Install dependencies
+      - name: Extract package name
+        id: package
         shell: bash
-        run: cabal build all --only-dependencies --enable-tests -j +RTS -A128m -n2m -N -RTS -O0 --ghc-options="-j ${{ inputs.ghc-options }}"
+        run: |
+          cabal_file=$(find . -maxdepth 1 -name "*.cabal" -print -quit)
+          package_name=$(awk -F ":[[:space:]]*" 'tolower($1)=="name" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2 }' < "$cabal_file")
+          echo "name=$package_name" >> "$GITHUB_OUTPUT"
 
-      - name: Install doctest
-        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
-        run: cabal install doctest --overwrite-policy=always
+      # We're doing it in such a complicated way to work around a bug in Cabal,
+      # due to which it may generate documentation dist only for the internal libs,
+      # if the name of the package is not specified thus:
+      # `cabal haddock --haddock-for-hackage $package_name`.
+      # This single invocation produces both the Hackage-ready docs tarball and
+      # the plain HTML we also deploy to GitHub Pages, so it only runs once.
+      - name: Build Haddock for Hackage
+        shell: bash
+        run: |
+          set -euo pipefail
+          cabal update
+          cabal haddock --haddock-for-hackage "${{ steps.package.outputs.name }}"
 
       - name: Save dependencies cache
-        uses: actions/cache/save@v5
+        uses: actions/cache/save@v4
         if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
         with:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
-      - name: Compile
-        shell: bash
-        run: cabal build all -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
+      - name: Upload the Hackage docs tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: hackage-docs
+          path: dist-newstyle/*-docs.tar.gz
 
-      - name: Test
-        if: ${{ !inputs.skip-tests }}
+      - name: Extract docs for GitHub Pages
         shell: bash
-        run: >
-          cabal test all --test-show-details streaming -j
-          +RTS -A128m -n2m -N -RTS
-          --ghc-options="${{ inputs.ghc-options }}"
-          --test-options="${{ inputs.test-options }}"
+        run: |
+          set -euo pipefail
+          tarball=$(find dist-newstyle -maxdepth 1 -name "*-docs.tar.gz" -print -quit)
+          mkdir -p pages-docs
+          tar xzf "$tarball" -C pages-docs --strip-components=1
 
-      - name: Extract metadata from cabal file
-        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
-        id: cabal-metadata
-        uses: nikita-volkov/extract-metadata-from-cabal.github-action@v1
-
-      - name: Run doctests
-        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
+      - name: Add a landing page
         shell: bash
-        run: >
-          cabal repl --with-compiler=doctest
-          ${{ inputs.doctest-target != '' && inputs.doctest-target || steps.cabal-metadata.outputs.name }}
+        run: |
+          cat > pages-docs/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="0; url=doc-index.html" />
+              <title>Redirecting to the documentation index…</title>
+            </head>
+            <body>
+              <p>Redirecting to <a href="doc-index.html">the documentation index</a>…</p>
+            </body>
+          </html>
+          EOF
+
+      - name: Enrich documentation footers
+        shell: bash
+        run: |
+          COMMIT_HASH="${{ github.sha }}"
+          REPO_URL="https://github.com/${{ github.repository }}/tree/${COMMIT_HASH}"
+          find pages-docs -name "*.html" -type f -exec sed -i \
+            "s|<div id=\"footer\"><p>Produced by <a href=\"http://www.haskell.org/haddock/\">Haddock</a>|<div id=\"footer\"><p>Produced from commit <a href=\"${REPO_URL}\">${COMMIT_HASH:0:7}</a> by <a href=\"http://www.haskell.org/haddock/\">Haddock</a>|g" {} \;
+
+      - name: Add .nojekyll (avoid Jekyll processing)
+        run: touch pages-docs/.nojekyll
+
+      - name: Upload the GitHub Pages docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-docs
+          path: pages-docs

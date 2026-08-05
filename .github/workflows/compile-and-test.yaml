@@ -1,0 +1,133 @@
+name: Compile, test and check a Haskell package
+
+on:
+  workflow_call:
+    inputs:
+      ghc:
+        description: GHC version to use. For example, "8.10.7" or "latest".
+        type: string
+        default: latest
+      ghc-options:
+        description: Extra GHC options to pass to cabal build and cabal test.
+        type: string
+        default: ""
+      test-options:
+        description: Extra CLI options to pass to the test suite.
+        type: string
+        default: ""
+      cabal-configure-extra-args:
+        description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text < 2\"".
+        type: string
+        default: ""
+      skip-tests:
+        description: Skip building and running all tests including doctest.
+        type: boolean
+        default: false
+      skip-doctest:
+        description: Skip building and running doctests.
+        type: boolean
+        default: false
+      skip-benchmarks:
+        description: Skip building benchmarks. For now they don't get executed either way.
+        type: boolean
+        default: false
+      doctest-target:
+        description: >
+          Cabal target to run doctest against. Defaults to the package name (its main
+          library). Override this for packages that split their code into an internal
+          sublibrary depended-on by the main library, since doctest cannot build a local
+          sublibrary dependency (only repl into it directly) — e.g. set this to
+          "mypackage:internal".
+        type: string
+        default: ""
+
+jobs:
+  compile-and-test:
+    strategy:
+      fail-fast: false
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Restore cached GHC toolchain
+        uses: actions/cache/restore@v5
+        id: ghcup-cache
+        with:
+          path: ~/.ghcup
+          key: ${{ runner.os }}-ghcup-${{ inputs.ghc }}
+
+      - name: Set up build tools
+        id: setup
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ inputs.ghc }}
+
+      - name: Save GHC toolchain cache
+        uses: actions/cache/save@v5
+        if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
+        with:
+          path: ~/.ghcup
+          key: ${{ steps.ghcup-cache.outputs.cache-primary-key }}
+
+      - uses: actions/checkout@v6
+
+      - name: Configure
+        shell: bash
+        run: >
+          cabal configure
+          ${{ !inputs.skip-tests && '--enable-tests' || '' }}
+          ${{ !inputs.skip-benchmarks && '--enable-benchmarks' || '' }}
+          ${{ inputs.cabal-configure-extra-args }}
+
+      - name: Generate the plan
+        run: cabal build all --dry-run --enable-tests
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v5
+        id: cache
+        env:
+          key: ${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}-${{ github.job }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}
+
+      - name: Install dependencies
+        shell: bash
+        run: cabal build all --only-dependencies --enable-tests -j +RTS -A128m -n2m -N -RTS -O0 --ghc-options="-j ${{ inputs.ghc-options }}"
+
+      - name: Install doctest
+        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
+        run: cabal install doctest --overwrite-policy=always
+
+      - name: Save dependencies cache
+        uses: actions/cache/save@v5
+        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Compile
+        shell: bash
+        run: cabal build all -j +RTS -A128m -n2m -N -RTS --ghc-options="${{ inputs.ghc-options }}"
+
+      - name: Test
+        if: ${{ !inputs.skip-tests }}
+        shell: bash
+        run: >
+          cabal test all --test-show-details streaming -j
+          +RTS -A128m -n2m -N -RTS
+          --ghc-options="${{ inputs.ghc-options }}"
+          --test-options="${{ inputs.test-options }}"
+
+      - name: Extract metadata from cabal file
+        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
+        id: cabal-metadata
+        uses: nikita-volkov/extract-metadata-from-cabal.github-action@v1
+
+      - name: Run doctests
+        if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
+        shell: bash
+        run: >
+          cabal repl --with-compiler=doctest
+          ${{ inputs.doctest-target != '' && inputs.doctest-target || steps.cabal-metadata.outputs.name }}
