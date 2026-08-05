@@ -1,0 +1,41 @@
+name: Set up Haskell with cache
+description: Installs the GHC/Cabal toolchain, caching it across runs.
+
+inputs:
+  ghc:
+    description: GHC version to install. For example, "8.10.7" or "latest".
+    required: true
+
+outputs:
+  ghc-version:
+    description: The installed GHC version.
+    value: ${{ steps.setup.outputs.ghc-version }}
+  cabal-version:
+    description: The installed Cabal version.
+    value: ${{ steps.setup.outputs.cabal-version }}
+  cabal-store:
+    description: Path to the Cabal store.
+    value: ${{ steps.setup.outputs.cabal-store }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore cached GHC toolchain
+      uses: actions/cache/restore@v5
+      id: ghcup-cache
+      with:
+        path: ~/.ghcup
+        key: ${{ runner.os }}-ghcup-${{ inputs.ghc }}
+
+    - name: Set up build tools
+      id: setup
+      uses: haskell-actions/setup@v2
+      with:
+        ghc-version: ${{ inputs.ghc }}
+
+    - name: Save GHC toolchain cache
+      uses: actions/cache/save@v5
+      if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
+      with:
+        path: ~/.ghcup
+        key: ${{ steps.ghcup-cache.outputs.cache-primary-key }}
