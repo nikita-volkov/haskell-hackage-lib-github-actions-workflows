@@ -84,20 +84,53 @@ jobs:
         with:
           name: hackage-docs
 
-      - name: Publish on Hackage (with docs)
-        if: steps.check-tag.outputs.already-released != 'true' && inputs.upload-docs
-        uses: haskell-actions/hackage-publish@v1.1
-        with:
-          hackageToken: ${{ secrets.HACKAGE_TOKEN }}
-          publish: ${{ !inputs.candidate }}
-          docsPath: dist-newstyle
-
       - name: Publish on Hackage
-        if: steps.check-tag.outputs.already-released != 'true' && !inputs.upload-docs
-        uses: haskell-actions/hackage-publish@v1.1
-        with:
-          hackageToken: ${{ secrets.HACKAGE_TOKEN }}
-          publish: ${{ !inputs.candidate }}
+        if: steps.check-tag.outputs.already-released != 'true'
+        env:
+          HACKAGE_SERVER: http://hackage.haskell.org
+          HACKAGE_TOKEN: ${{ secrets.HACKAGE_TOKEN }}
+          PUBLISH: ${{ !inputs.candidate }}
+          PACKAGES_PATH: dist-newstyle/sdist/
+          DOCS_PATH: ${{ inputs.upload-docs && 'dist-newstyle' || '' }}
+        run: |
+          HACKAGE_AUTH_HEADER="Authorization: X-ApiKey ${HACKAGE_TOKEN}"
+
+          for PACKAGE_TARBALL in $(find "${PACKAGES_PATH}" -maxdepth 1 -name "*.tar.gz"); do
+              PACKAGE_NAME=$(basename ${PACKAGE_TARBALL%.*.*})
+
+              if [ "${PUBLISH}" == "true" ];
+                then
+                  TARGET_URL="${HACKAGE_SERVER}/packages/upload";
+                  PACKAGE_URL="${HACKAGE_SERVER}/package/$PACKAGE_NAME"
+                  HACKAGE_STATUS=$(curl --header "${HACKAGE_AUTH_HEADER}" --silent --head -w %{http_code} -XGET --anyauth ${HACKAGE_SERVER}/package/${PACKAGE_NAME} -o /dev/null)
+                else
+                  TARGET_URL="${HACKAGE_SERVER}/packages/candidates";
+                  PACKAGE_URL="${HACKAGE_SERVER}/package/$PACKAGE_NAME/candidate"
+                  HACKAGE_STATUS=404
+              fi
+
+              DOCS_URL="$PACKAGE_URL/docs"
+
+              if [ "$HACKAGE_STATUS" = "404" ]; then
+                echo "Uploading ${PACKAGE_NAME} to ${TARGET_URL}"
+                curl -X POST -f --header "${HACKAGE_AUTH_HEADER}" ${TARGET_URL} -F "package=@$PACKAGE_TARBALL"
+                echo "Uploaded ${PACKAGE_URL}"
+
+                DOC_FILE_NAME="${DOCS_PATH}/${PACKAGE_NAME}-docs.tar.gz"
+                if [ -n "${DOCS_PATH}" ] && [ -f "$DOC_FILE_NAME" ]; then
+                  echo "Uploading documentation for ${PACKAGE_NAME} to ${DOCS_URL}"
+                  curl -X PUT \
+                    -H 'Content-Type: application/x-tar' \
+                    -H 'Content-Encoding: gzip' \
+                    -H "${HACKAGE_AUTH_HEADER}" \
+                    --data-binary "@$DOC_FILE_NAME" \
+                    "$DOCS_URL"
+                fi
+
+              else
+                echo "Package ${PACKAGE_NAME}" already exists on Hackage.
+              fi
+          done
 
       - name: Commit the version update
         if: steps.check-tag.outputs.already-released != 'true' && !inputs.candidate
