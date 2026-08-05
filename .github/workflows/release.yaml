@@ -88,13 +88,6 @@ jobs:
           hackageToken: ${{ secrets.HACKAGE_TOKEN }}
           publish: ${{ steps.detect.outputs.candidate != 'true' }}
 
-      - name: Prepend a fresh Upcoming section to the changelog
-        if: steps.detect.outputs.ready == 'true' && steps.detect.outputs.candidate != 'true'
-        run: |
-          set -euo pipefail
-          printf '# Upcoming\n\n' | cat - CHANGELOG.md > CHANGELOG.md.new
-          mv CHANGELOG.md.new CHANGELOG.md
-
       - name: Commit the version update
         if: steps.detect.outputs.ready == 'true' && steps.detect.outputs.candidate != 'true'
         id: commit
