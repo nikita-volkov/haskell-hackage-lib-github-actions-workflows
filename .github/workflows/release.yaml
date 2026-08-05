@@ -73,6 +73,20 @@ jobs:
         if: steps.detect.outputs.ready == 'true'
         run: cabal sdist
 
+      - name: Generate Haddock for Hackage
+        if: steps.detect.outputs.ready == 'true' && inputs.upload-docs
+        shell: bash
+        # We're doing it in such a complicated way to work around a bug in Cabal,
+        # due to which it may generate documentation dist only for the internal libs,
+        # if the name of the package is not specified thus:
+        # `cabal haddock --haddock-for-hackage $package_name`.
+        run: |
+          set -euo pipefail
+          cabal_file=$(find . -maxdepth 1 -name "*.cabal" -print -quit)
+          package_name=$(awk -F ":[[:space:]]*" 'tolower($1)=="name" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2 }' < "$cabal_file")
+          cabal update
+          cabal haddock --haddock-for-hackage "$package_name"
+
       - name: Publish on Hackage (with docs)
         if: steps.detect.outputs.ready == 'true' && inputs.upload-docs
         uses: haskell-actions/hackage-publish@v1.1
