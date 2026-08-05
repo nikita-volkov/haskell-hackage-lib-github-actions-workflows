@@ -1,0 +1,46 @@
+name: Sdist
+
+on:
+  workflow_call:
+    inputs:
+      ghc:
+        description: GHC version to use for the source distribution. For example, "8.10.7" or "latest".
+        type: string
+        default: latest
+      version:
+        description: Version to set in the .cabal file before generating the source distribution (e.g. for a release). Leave empty to build with whatever version is already in the tree.
+        type: string
+        default: ""
+
+jobs:
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Haskell with cache
+        uses: ./.github/actions/setup-haskell-with-cache
+        with:
+          ghc: ${{ inputs.ghc }}
+
+      - name: Set package version
+        if: inputs.version != ''
+        uses: nikita-volkov/edit-cabal-version.github-action@v1
+        with:
+          mode: set
+          set-value: ${{ inputs.version }}
+
+      - name: Check cabal file
+        shell: bash
+        run: cabal check
+
+      - name: Generate source distribution
+        shell: bash
+        run: cabal sdist
+
+      - name: Upload the source distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist-newstyle/sdist/*.tar.gz
