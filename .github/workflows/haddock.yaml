@@ -19,11 +19,25 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Set up Haskell with cache
-        id: setup
-        uses: ./.github/actions/setup-haskell-with-cache
+      - name: Restore cached GHC toolchain
+        uses: actions/cache/restore@v5
+        id: ghcup-cache
         with:
-          ghc: ${{ inputs.ghc }}
+          path: ~/.ghcup
+          key: ${{ runner.os }}-ghcup-${{ inputs.ghc }}
+
+      - name: Set up build tools
+        id: setup
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ inputs.ghc }}
+
+      - name: Save GHC toolchain cache
+        uses: actions/cache/save@v5
+        if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
+        with:
+          path: ~/.ghcup
+          key: ${{ steps.ghcup-cache.outputs.cache-primary-key }}
 
       - name: Set package version
         if: inputs.version != ''
