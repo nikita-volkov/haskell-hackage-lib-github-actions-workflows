@@ -20,8 +20,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
-
       - name: Restore cached GHC toolchain
         uses: actions/cache/restore@v4
         id: ghcup-cache
@@ -41,6 +39,8 @@ jobs:
         with:
           path: ~/.ghcup
           key: ${{ steps.ghcup-cache.outputs.cache-primary-key }}
+
+      - uses: actions/checkout@v6
 
       - name: Configure
         shell: bash

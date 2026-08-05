@@ -12,8 +12,6 @@ jobs:
   cabal-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-
       - name: Restore cached GHC toolchain
         uses: actions/cache/restore@v5
         id: ghcup-cache
@@ -33,6 +31,8 @@ jobs:
         with:
           path: ~/.ghcup
           key: ${{ steps.ghcup-cache.outputs.cache-primary-key }}
+
+      - uses: actions/checkout@v6
 
       - name: Check cabal file
         shell: bash
