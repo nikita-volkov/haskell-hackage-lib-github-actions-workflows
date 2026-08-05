@@ -59,7 +59,6 @@ jobs:
       ghc-latest: ${{ inputs.ghc-latest }}
       doctest: ${{ inputs.doctest }}
       test-options: ${{ inputs.test-options }}
-      version: ${{ needs.detect.outputs.ready == 'true' && needs.detect.outputs.version || '' }}
 
   format:
     if: github.event_name == 'push'
@@ -69,9 +68,17 @@ jobs:
       group: format-${{ github.ref }}
       cancel-in-progress: false
 
+  package:
+    needs: [detect, format]
+    if: ${{ !cancelled() && needs.detect.result == 'success' && (needs.format.result == 'success' || needs.format.result == 'skipped') }}
+    uses: ./.github/workflows/package.yaml
+    secrets: inherit
+    with:
+      version: ${{ needs.detect.outputs.ready == 'true' && needs.detect.outputs.version || '' }}
+
   deploy-docs:
     if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
-    needs: build
+    needs: package
     runs-on: ubuntu-latest
     concurrency:
       group: deploy-docs-${{ github.ref }}
@@ -99,7 +106,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   release:
-    needs: [detect, build, format]
+    needs: [detect, build, format, package]
     if: github.event_name == 'push' && needs.detect.outputs.ready == 'true'
     runs-on: ubuntu-latest
     concurrency:

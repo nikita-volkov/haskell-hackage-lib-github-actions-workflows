@@ -1,0 +1,185 @@
+name: Package
+
+on:
+  workflow_call:
+    inputs:
+      ghc:
+        description: GHC version to use for the source distribution and Haddock generation. For example, "8.10.7" or "latest".
+        type: string
+        default: latest
+      version:
+        description: Version to set in the .cabal file before generating the source distribution and Haddock docs (e.g. for a release). Leave empty to build with whatever version is already in the tree.
+        type: string
+        default: ""
+
+jobs:
+
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore cached GHC toolchain
+        uses: actions/cache/restore@v5
+        id: ghcup-cache
+        with:
+          path: ~/.ghcup
+          key: ${{ runner.os }}-ghcup-${{ inputs.ghc }}
+
+      - name: Set up build tools
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ inputs.ghc }}
+
+      - name: Save GHC toolchain cache
+        uses: actions/cache/save@v5
+        if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
+        with:
+          path: ~/.ghcup
+          key: ${{ steps.ghcup-cache.outputs.cache-primary-key }}
+
+      - uses: actions/checkout@v6
+
+      - name: Set package version
+        if: inputs.version != ''
+        uses: nikita-volkov/edit-cabal-version.github-action@v1
+        with:
+          mode: set
+          set-value: ${{ inputs.version }}
+
+      - name: Check cabal file
+        shell: bash
+        run: cabal check
+
+      - name: Generate source distribution
+        shell: bash
+        run: cabal sdist
+
+      - name: Upload the source distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist-newstyle/sdist/*.tar.gz
+
+  haddock:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore cached GHC toolchain
+        uses: actions/cache/restore@v4
+        id: ghcup-cache
+        with:
+          path: ~/.ghcup
+          key: ${{ runner.os }}-ghcup-${{ inputs.ghc }}
+
+      - name: Set up build tools
+        id: setup
+        uses: haskell-actions/setup@v2
+        with:
+          ghc-version: ${{ inputs.ghc }}
+
+      - name: Save GHC toolchain cache
+        uses: actions/cache/save@v4
+        if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
+        with:
+          path: ~/.ghcup
+          key: ${{ steps.ghcup-cache.outputs.cache-primary-key }}
+
+      - uses: actions/checkout@v6
+
+      - name: Set package version
+        if: inputs.version != ''
+        uses: nikita-volkov/edit-cabal-version.github-action@v1
+        with:
+          mode: set
+          set-value: ${{ inputs.version }}
+
+      - name: Configure
+        shell: bash
+        run: cabal configure --enable-documentation
+
+      - name: Generate the plan
+        shell: bash
+        run: cabal build all --enable-documentation --dry-run
+
+      - name: Restore cached dependencies
+        uses: actions/cache/restore@v4
+        id: cache
+        env:
+          key: build-haddock-${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ env.key }}-${{ hashFiles('**/plan.json') }}
+          restore-keys: ${{ env.key }}
+
+      - name: Extract package name
+        id: package
+        shell: bash
+        run: |
+          cabal_file=$(find . -maxdepth 1 -name "*.cabal" -print -quit)
+          package_name=$(awk -F ":[[:space:]]*" 'tolower($1)=="name" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2 }' < "$cabal_file")
+          echo "name=$package_name" >> "$GITHUB_OUTPUT"
+
+      # We're doing it in such a complicated way to work around a bug in Cabal,
+      # due to which it may generate documentation dist only for the internal libs,
+      # if the name of the package is not specified thus:
+      # `cabal haddock --haddock-for-hackage $package_name`.
+      # This single invocation produces both the Hackage-ready docs tarball and
+      # the plain HTML we also deploy to GitHub Pages, so it only runs once.
+      - name: Build Haddock for Hackage
+        shell: bash
+        run: |
+          set -euo pipefail
+          cabal update
+          cabal haddock --haddock-for-hackage "${{ steps.package.outputs.name }}"
+
+      - name: Save dependencies cache
+        uses: actions/cache/save@v4
+        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
+
+      - name: Upload the Hackage docs tarball
+        uses: actions/upload-artifact@v4
+        with:
+          name: hackage-docs
+          path: dist-newstyle/*-docs.tar.gz
+
+      - name: Extract docs for GitHub Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          tarball=$(find dist-newstyle -maxdepth 1 -name "*-docs.tar.gz" -print -quit)
+          mkdir -p pages-docs
+          tar xzf "$tarball" -C pages-docs --strip-components=1
+
+      - name: Add a landing page
+        shell: bash
+        run: |
+          cat > pages-docs/index.html <<'EOF'
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta http-equiv="refresh" content="0; url=doc-index.html" />
+              <title>Redirecting to the documentation index…</title>
+            </head>
+            <body>
+              <p>Redirecting to <a href="doc-index.html">the documentation index</a>…</p>
+            </body>
+          </html>
+          EOF
+
+      - name: Enrich documentation footers
+        shell: bash
+        run: |
+          COMMIT_HASH="${{ github.sha }}"
+          REPO_URL="https://github.com/${{ github.repository }}/tree/${COMMIT_HASH}"
+          find pages-docs -name "*.html" -type f -exec sed -i \
+            "s|<div id=\"footer\"><p>Produced by <a href=\"http://www.haskell.org/haddock/\">Haddock</a>|<div id=\"footer\"><p>Produced from commit <a href=\"${REPO_URL}\">${COMMIT_HASH:0:7}</a> by <a href=\"http://www.haskell.org/haddock/\">Haddock</a>|g" {} \;
+
+      - name: Add .nojekyll (avoid Jekyll processing)
+        run: touch pages-docs/.nojekyll
+
+      - name: Upload the GitHub Pages docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-docs
+          path: pages-docs
