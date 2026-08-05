@@ -101,7 +101,7 @@ jobs:
       id-token: write
 
   release:
-    needs: [detect, build-with-oldest, build-with-latest, format, sdist, haddock]
+    needs: [detect, build-with-oldest, build-with-latest, sdist, haddock]
     if: github.event_name == 'push' && needs.detect.outputs.ready == 'true'
     uses: ./.github/workflows/release.yaml
     secrets: inherit
