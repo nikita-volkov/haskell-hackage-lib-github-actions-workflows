@@ -93,9 +93,17 @@ jobs:
           PACKAGES_PATH: dist-newstyle/sdist/
           DOCS_PATH: ${{ inputs.upload-docs && 'dist-newstyle' || '' }}
         run: |
+          set -euo pipefail
+
           HACKAGE_AUTH_HEADER="Authorization: X-ApiKey ${HACKAGE_TOKEN}"
 
-          for PACKAGE_TARBALL in $(find "${PACKAGES_PATH}" -maxdepth 1 -name "*.tar.gz"); do
+          mapfile -d '' -t PACKAGE_TARBALLS < <(find "${PACKAGES_PATH}" -maxdepth 1 -name "*.tar.gz" -print0)
+          if [ "${#PACKAGE_TARBALLS[@]}" -eq 0 ]; then
+            echo "::error::No package tarballs found in ${PACKAGES_PATH}" >&2
+            exit 1
+          fi
+
+          for PACKAGE_TARBALL in "${PACKAGE_TARBALLS[@]}"; do
               PACKAGE_NAME=$(basename ${PACKAGE_TARBALL%.*.*})
 
               if [ "${PUBLISH}" == "true" ];
@@ -119,7 +127,7 @@ jobs:
                 DOC_FILE_NAME="${DOCS_PATH}/${PACKAGE_NAME}-docs.tar.gz"
                 if [ -n "${DOCS_PATH}" ] && [ -f "$DOC_FILE_NAME" ]; then
                   echo "Uploading documentation for ${PACKAGE_NAME} to ${DOCS_URL}"
-                  curl -X PUT \
+                  curl -X PUT -f \
                     -H 'Content-Type: application/x-tar' \
                     -H 'Content-Encoding: gzip' \
                     -H "${HACKAGE_AUTH_HEADER}" \
