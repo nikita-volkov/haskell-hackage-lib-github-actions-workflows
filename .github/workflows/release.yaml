@@ -77,12 +77,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: sdist
+          path: dist-newstyle/sdist
 
       - name: Download the Hackage docs tarball
         if: steps.check-tag.outputs.already-released != 'true' && inputs.upload-docs
         uses: actions/download-artifact@v4
         with:
           name: hackage-docs
+          path: dist-newstyle
 
       - name: Publish on Hackage
         if: steps.check-tag.outputs.already-released != 'true'
