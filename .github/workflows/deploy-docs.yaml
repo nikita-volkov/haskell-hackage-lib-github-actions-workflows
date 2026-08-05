@@ -1,0 +1,35 @@
+name: Deploy docs
+
+on:
+  workflow_call:
+
+permissions:
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy-docs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+
+  deploy-docs:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Download the GitHub Pages docs
+        uses: actions/download-artifact@v4
+        with:
+          name: pages-docs
+          path: pages-docs
+
+      - name: Upload artifact for Pages
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: pages-docs
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

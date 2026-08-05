@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to release.
+        type: string
+        required: true
+      candidate:
+        description: Whether this is a release candidate.
+        type: boolean
+        default: false
+      notes:
+        description: Release notes.
+        type: string
+        default: ""
+      upload-docs:
+        description: Whether Haddock docs were built and should be published to Hackage.
+        type: boolean
+        default: false
+    secrets:
+      HACKAGE_TOKEN:
+        required: false
+
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+
+  release:
+    runs-on: ubuntu-latest
+    environment:
+      name: hackage
+      url: ${{ steps.generate-hackage-url.outputs.url }}
+    steps:
+      - name: Check whether this version is already released
+        id: check-tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${{ github.repository }}/git/ref/tags/v${{ inputs.version }}" >/dev/null 2>&1; then
+            echo "Version v${{ inputs.version }} is already released, skipping."
+            echo "already-released=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already-released=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v6
+        if: steps.check-tag.outputs.already-released != 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Set package version
+        if: steps.check-tag.outputs.already-released != 'true'
+        uses: nikita-volkov/edit-cabal-version.github-action@v1
+        with:
+          mode: set
+          set-value: ${{ inputs.version }}
+
+      - name: Extract package name and generate Hackage URL
+        if: steps.check-tag.outputs.already-released != 'true'
+        id: generate-hackage-url
+        run: |
+          cabal_file=$(find . -maxdepth 1 -name "*.cabal" -print -quit)
+          package_name=$(awk -F ":[[:space:]]*" 'tolower($1)=="name" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2 }' < "$cabal_file")
+          if [ "${{ inputs.candidate }}" = "true" ]; then
+            url="https://hackage.haskell.org/package/${package_name}/candidates"
+          else
+            url="https://hackage.haskell.org/package/${package_name}-${{ inputs.version }}"
+          fi
+          echo "url=${url}" >> "$GITHUB_OUTPUT"
+
+      - name: Download the source distribution
+        if: steps.check-tag.outputs.already-released != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+
+      - name: Download the Hackage docs tarball
+        if: steps.check-tag.outputs.already-released != 'true' && inputs.upload-docs
+        uses: actions/download-artifact@v4
+        with:
+          name: hackage-docs
+
+      - name: Publish on Hackage (with docs)
+        if: steps.check-tag.outputs.already-released != 'true' && inputs.upload-docs
+        uses: haskell-actions/hackage-publish@v1.1
+        with:
+          hackageToken: ${{ secrets.HACKAGE_TOKEN }}
+          publish: ${{ !inputs.candidate }}
+          docsPath: dist-newstyle
+
+      - name: Publish on Hackage
+        if: steps.check-tag.outputs.already-released != 'true' && !inputs.upload-docs
+        uses: haskell-actions/hackage-publish@v1.1
+        with:
+          hackageToken: ${{ secrets.HACKAGE_TOKEN }}
+          publish: ${{ !inputs.candidate }}
+
+      - name: Commit the version update
+        if: steps.check-tag.outputs.already-released != 'true' && !inputs.candidate
+        id: commit
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: Set package version to ${{ inputs.version }}
+          file_pattern: "*.cabal CHANGELOG.md"
+
+      - name: Create GitHub release
+        if: steps.check-tag.outputs.already-released != 'true' && !inputs.candidate
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          name: v${{ inputs.version }}
+          body: ${{ inputs.notes }}
+          target_commitish: ${{ steps.commit.outputs.commit_hash }}
+          files: dist-newstyle/sdist/*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
