@@ -50,14 +50,22 @@ jobs:
         id: detect
         uses: nikita-volkov/changelog-driven-release.github-action@v1
 
-  build:
+  build-with-oldest:
     needs: detect
-    uses: ./.github/workflows/build.yaml
+    uses: ./.github/workflows/compile-and-test.yaml
     secrets: inherit
     with:
-      ghc-oldest: ${{ inputs.ghc-oldest }}
-      ghc-latest: ${{ inputs.ghc-latest }}
-      doctest: ${{ inputs.doctest }}
+      ghc: ${{ inputs.ghc-oldest }}
+      skip-benchmarks: true
+      skip-doctest: true
+
+  build-with-latest:
+    needs: detect
+    uses: ./.github/workflows/compile-and-test.yaml
+    secrets: inherit
+    with:
+      ghc: ${{ inputs.ghc-latest }}
+      skip-doctest: ${{ !inputs.doctest }}
       test-options: ${{ inputs.test-options }}
 
   format:
@@ -106,7 +114,7 @@ jobs:
         uses: actions/deploy-pages@v4
 
   release:
-    needs: [detect, build, format, package]
+    needs: [detect, build-with-oldest, build-with-latest, format, package]
     if: github.event_name == 'push' && needs.detect.outputs.ready == 'true'
     runs-on: ubuntu-latest
     concurrency:
