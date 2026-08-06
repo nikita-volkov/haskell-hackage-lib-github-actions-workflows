@@ -108,7 +108,10 @@ jobs:
         with:
           tag_name: v${{ inputs.version }}
           name: v${{ inputs.version }}
-          body: ${{ inputs.notes }}
+          body: |
+            ${{ inputs.notes }}
+
+            [Hackage release](${{ steps.generate-hackage-url.outputs.url }})
           target_commitish: ${{ steps.commit.outputs.commit_hash }}
           files: dist-newstyle/sdist/*.tar.gz
           draft: false
