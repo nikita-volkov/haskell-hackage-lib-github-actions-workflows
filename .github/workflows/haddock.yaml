@@ -93,7 +93,7 @@ jobs:
           key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - name: Upload the Hackage docs tarball
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hackage-docs
           path: dist-newstyle/*-docs.tar.gz
@@ -134,7 +134,7 @@ jobs:
         run: touch pages-docs/.nojekyll
 
       - name: Upload the GitHub Pages docs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pages-docs
           path: pages-docs

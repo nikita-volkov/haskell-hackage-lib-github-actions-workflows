@@ -20,16 +20,16 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - name: Download the GitHub Pages docs
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: pages-docs
           path: pages-docs
 
       - name: Upload artifact for Pages
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: pages-docs
 
       - name: Deploy to GitHub Pages
         id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
