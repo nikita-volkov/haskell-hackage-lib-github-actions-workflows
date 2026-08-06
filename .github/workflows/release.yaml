@@ -87,13 +87,27 @@ jobs:
           name: hackage-docs
           path: dist-newstyle
 
+      - name: Resolve artifact paths
+        if: steps.check-tag.outputs.already-released != 'true'
+        id: artifacts
+        run: |
+          package_path=$(find dist-newstyle/sdist -maxdepth 1 -name "*.tar.gz" -print -quit)
+          echo "package-path=${package_path}" >> "$GITHUB_OUTPUT"
+          if [ "${{ inputs.upload-docs }}" = "true" ]; then
+            doc_path=$(find dist-newstyle -maxdepth 1 -name "*-docs.tar.gz" -print -quit)
+            echo "doc-path=${doc_path}" >> "$GITHUB_OUTPUT"
+          else
+            echo "doc-path=" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish on Hackage
         if: steps.check-tag.outputs.already-released != 'true'
-        uses: nikita-volkov/hackage-publish.github-action@v3
+        uses: nikita-volkov/publish-to-hackage.github-action@v4
         with:
           token: ${{ secrets.HACKAGE_TOKEN }}
           publish: ${{ !inputs.candidate }}
-          docsPath: ${{ inputs.upload-docs && 'dist-newstyle' || '' }}
+          package-path: ${{ steps.artifacts.outputs.package-path }}
+          doc-path: ${{ steps.artifacts.outputs.doc-path }}
 
       - name: Commit the version update
         if: steps.check-tag.outputs.already-released != 'true' && !inputs.candidate
