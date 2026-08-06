@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref }}
 
       - name: Restore cached GHC toolchain
         uses: actions/cache/restore@v5
