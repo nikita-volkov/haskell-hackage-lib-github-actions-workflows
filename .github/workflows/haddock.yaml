@@ -108,22 +108,6 @@ jobs:
           mkdir -p pages-docs
           tar xzf "$tarball" -C pages-docs --strip-components=1
 
-      - name: Add a landing page
-        shell: bash
-        run: |
-          cat > pages-docs/index.html <<'EOF'
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta http-equiv="refresh" content="0; url=doc-index.html" />
-              <title>Redirecting to the documentation index…</title>
-            </head>
-            <body>
-              <p>Redirecting to <a href="doc-index.html">the documentation index</a>…</p>
-            </body>
-          </html>
-          EOF
-
       - name: Enrich documentation footers
         shell: bash
         run: |
