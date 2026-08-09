@@ -47,6 +47,7 @@ on:
 
 jobs:
   compile-and-test:
+    name: compile-and-test (GHC ${{ inputs.ghc }}, ${{ inputs.os }})
     runs-on: ${{ inputs.os }}
 
     steps:

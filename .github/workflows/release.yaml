@@ -30,6 +30,7 @@ concurrency:
 jobs:
 
   release:
+    name: release ${{ inputs.version }}
     runs-on: ubuntu-latest
     environment:
       name: hackage
