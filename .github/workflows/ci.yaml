@@ -24,11 +24,19 @@ on:
         type: string
         default: ""
       windows:
-        description: Also build and test the latest GHC on Windows (in addition to Linux).
+        description: Also build the latest GHC on Windows (in addition to Linux). Tests on Windows are controlled by `test-on-windows`.
         type: boolean
         default: false
       macos:
-        description: Also build and test the latest GHC on macOS (in addition to Linux).
+        description: Also build the latest GHC on macOS (in addition to Linux). Tests on macOS are controlled by `test-on-macos`.
+        type: boolean
+        default: false
+      test-on-windows:
+        description: Run the test suite on the Windows build. Only meaningful when `windows` is enabled. With the default `false`, a Windows build compiles but does not run tests.
+        type: boolean
+        default: false
+      test-on-macos:
+        description: Run the test suite on the macOS build. Only meaningful when `macos` is enabled. With the default `false`, a macOS build compiles but does not run tests.
         type: boolean
         default: false
     secrets:
@@ -67,19 +75,39 @@ jobs:
       skip-benchmarks: true
       skip-doctest: true
 
-  build-with-latest:
+  build-with-latest-linux:
     needs: detect
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ${{ fromJSON(format('["ubuntu-latest"{0}{1}]', inputs.windows && ', "windows-latest"' || '', inputs.macos && ', "macos-latest"' || '')) }}
     uses: ./.github/workflows/compile-and-test.yaml
     secrets: inherit
     with:
       ghc: ${{ inputs.ghc-latest }}
+      os: ubuntu-latest
       skip-doctest: ${{ !inputs.doctest }}
       test-options: ${{ inputs.test-options }}
-      os: ${{ matrix.os }}
+
+  build-with-latest-windows:
+    needs: detect
+    if: ${{ inputs.windows }}
+    uses: ./.github/workflows/compile-and-test.yaml
+    secrets: inherit
+    with:
+      ghc: ${{ inputs.ghc-latest }}
+      os: windows-latest
+      skip-tests: ${{ !inputs.test-on-windows }}
+      skip-doctest: ${{ !inputs.doctest }}
+      test-options: ${{ inputs.test-options }}
+
+  build-with-latest-macos:
+    needs: detect
+    if: ${{ inputs.macos }}
+    uses: ./.github/workflows/compile-and-test.yaml
+    secrets: inherit
+    with:
+      ghc: ${{ inputs.ghc-latest }}
+      os: macos-latest
+      skip-tests: ${{ !inputs.test-on-macos }}
+      skip-doctest: ${{ !inputs.doctest }}
+      test-options: ${{ inputs.test-options }}
 
   format:
     if: github.event_name == 'push'
@@ -114,8 +142,14 @@ jobs:
       id-token: write
 
   release:
-    needs: [detect, build-with-oldest, build-with-latest, sdist, haddock]
-    if: github.event_name == 'push' && needs.detect.outputs.ready == 'true'
+    needs: [detect, build-with-oldest, build-with-latest-linux, build-with-latest-windows, build-with-latest-macos, sdist, haddock]
+    if: >-
+      ${{ !cancelled()
+      && github.event_name == 'push'
+      && needs.detect.outputs.ready == 'true'
+      && needs.build-with-latest-linux.result == 'success'
+      && (needs.build-with-latest-windows.result == 'success' || needs.build-with-latest-windows.result == 'skipped')
+      && (needs.build-with-latest-macos.result == 'success' || needs.build-with-latest-macos.result == 'skipped') }}
     uses: ./.github/workflows/release.yaml
     secrets: inherit
     with:
