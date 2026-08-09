@@ -82,7 +82,9 @@ jobs:
           ${{ inputs.cabal-configure-extra-args }}
 
       - name: Generate the plan
-        run: cabal build all --dry-run --enable-tests
+        run: >
+          cabal build all --dry-run
+          ${{ !inputs.skip-tests && '--enable-tests' || '' }}
 
       - name: Restore cached dependencies
         uses: actions/cache/restore@v5
@@ -96,7 +98,10 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: cabal build all --only-dependencies --enable-tests -j +RTS -A128m -n2m -N -RTS -O0 --ghc-options="-j ${{ inputs.ghc-options }}"
+        run: >
+          cabal build all --only-dependencies
+          ${{ !inputs.skip-tests && '--enable-tests' || '' }}
+          -j +RTS -A128m -n2m -N -RTS -O0 --ghc-options="-j ${{ inputs.ghc-options }}"
 
       - name: Install doctest
         if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
