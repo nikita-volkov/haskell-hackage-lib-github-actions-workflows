@@ -75,39 +75,38 @@ jobs:
           package_name=$(awk -F ":[[:space:]]*" 'tolower($1)=="name" { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); print $2 }' < "$cabal_file")
           echo "name=$package_name" >> "$GITHUB_OUTPUT"
 
-      # We're doing it in such a complicated way to work around a bug in Cabal,
-      # due to which it may generate documentation dist only for the internal libs,
-      # if the name of the package is not specified thus:
-      # `cabal haddock --haddock-for-hackage $package_name`.
-      # This single invocation produces both the Hackage-ready docs tarball and
-      # the plain HTML we also deploy to GitHub Pages, so it only runs once.
-      - name: Build Haddock for Hackage
+      # Plain `cabal haddock` emits a standard docs tree that includes a
+      # top-level index.html (the module contents page), which GitHub Pages
+      # serves as the site root. `cabal haddock --haddock-for-hackage` (run
+      # below for the Hackage upload) omits that index.html, so the Pages docs
+      # are built from a separate plain invocation.
+      #
+      # The package name is passed explicitly to work around a Cabal quirk
+      # where otherwise docs may be generated only for the internal libraries.
+      - name: Build docs for GitHub Pages
         shell: bash
         run: |
           set -euo pipefail
           cabal update
-          cabal haddock --haddock-for-hackage "${{ steps.package.outputs.name }}"
+          cabal haddock "${{ steps.package.outputs.name }}"
 
-      - name: Save dependencies cache
-        uses: actions/cache/save@v4
-        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ steps.cache.outputs.cache-primary-key }}
-
-      - name: Upload the Hackage docs tarball
-        uses: actions/upload-artifact@v7
-        with:
-          name: hackage-docs
-          path: dist-newstyle/*-docs.tar.gz
-
-      - name: Extract docs for GitHub Pages
+      - name: Stage docs for GitHub Pages
         shell: bash
         run: |
           set -euo pipefail
-          tarball=$(find dist-newstyle -maxdepth 1 -name "*-docs.tar.gz" -print -quit)
+          package="${{ steps.package.outputs.name }}"
+          haddock_dir=$(find dist-newstyle -type d -path "*/doc/html/$package" -print -quit)
+          if [ -z "$haddock_dir" ]; then
+            echo "ERROR: could not locate Haddock output for package '$package'" >&2
+            exit 1
+          fi
+          rm -rf pages-docs
           mkdir -p pages-docs
-          tar xzf "$tarball" -C pages-docs --strip-components=1
+          cp -a "$haddock_dir/." pages-docs/
+          if [ ! -f pages-docs/index.html ]; then
+            echo "ERROR: no index.html in $haddock_dir; the Pages site root would 404" >&2
+            exit 1
+          fi
 
       - name: Enrich documentation footers
         shell: bash
@@ -125,3 +124,22 @@ jobs:
         with:
           name: pages-docs
           path: pages-docs
+
+      - name: Build Haddock for Hackage
+        shell: bash
+        run: |
+          set -euo pipefail
+          cabal haddock --haddock-for-hackage "${{ steps.package.outputs.name }}"
+
+      - name: Upload the Hackage docs tarball
+        uses: actions/upload-artifact@v7
+        with:
+          name: hackage-docs
+          path: dist-newstyle/*-docs.tar.gz
+
+      - name: Save dependencies cache
+        uses: actions/cache/save@v4
+        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
