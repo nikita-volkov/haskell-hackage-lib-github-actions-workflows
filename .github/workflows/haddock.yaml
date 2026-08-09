@@ -58,7 +58,7 @@ jobs:
         run: cabal build all --enable-documentation --dry-run
 
       - name: Restore cached dependencies
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         id: cache
         env:
           key: build-haddock-${{ runner.os }}-${{ steps.setup.outputs.cabal-version }}-${{ steps.setup.outputs.ghc-version }}
@@ -66,6 +66,19 @@ jobs:
           path: ${{ steps.setup.outputs.cabal-store }}
           key: ${{ env.key }}-${{ hashFiles('**/plan.json') }}
           restore-keys: ${{ env.key }}
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          cabal update
+          cabal build all --only-dependencies --enable-documentation -j +RTS -A128m -n2m -N -RTS -O0 --ghc-options="-j"
+
+      - name: Save dependencies cache
+        uses: actions/cache/save@v6
+        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
+        with:
+          path: ${{ steps.setup.outputs.cabal-store }}
+          key: ${{ steps.cache.outputs.cache-primary-key }}
 
       - name: Extract package name
         id: package
@@ -87,7 +100,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cabal update
           cabal haddock "${{ steps.package.outputs.name }}"
 
       - name: Stage docs for GitHub Pages
@@ -136,10 +148,3 @@ jobs:
         with:
           name: hackage-docs
           path: dist-newstyle/*-docs.tar.gz
-
-      - name: Save dependencies cache
-        uses: actions/cache/save@v4
-        if: ${{ steps.cache.outputs.cache-primary-key != steps.cache.outputs.cache-matched-key }}
-        with:
-          path: ${{ steps.setup.outputs.cabal-store }}
-          key: ${{ steps.cache.outputs.cache-primary-key }}
