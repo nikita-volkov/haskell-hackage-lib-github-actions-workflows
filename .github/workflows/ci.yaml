@@ -147,9 +147,12 @@ jobs:
       ${{ !cancelled()
       && github.event_name == 'push'
       && needs.detect.outputs.ready == 'true'
+      && needs.build-with-oldest.result == 'success'
       && needs.build-with-latest-linux.result == 'success'
       && (needs.build-with-latest-windows.result == 'success' || needs.build-with-latest-windows.result == 'skipped')
-      && (needs.build-with-latest-macos.result == 'success' || needs.build-with-latest-macos.result == 'skipped') }}
+      && (needs.build-with-latest-macos.result == 'success' || needs.build-with-latest-macos.result == 'skipped')
+      && needs.sdist.result == 'success'
+      && needs.haddock.result == 'success' }}
     uses: ./.github/workflows/release.yaml
     secrets: inherit
     with:
