@@ -23,6 +23,14 @@ on:
         description: Extra options passed to the test suite on the latest build.
         type: string
         default: ""
+      windows:
+        description: Also build and test the latest GHC on Windows (in addition to Linux).
+        type: boolean
+        default: false
+      macos:
+        description: Also build and test the latest GHC on macOS (in addition to Linux).
+        type: boolean
+        default: false
     secrets:
       HACKAGE_TOKEN:
         required: false
@@ -61,12 +69,17 @@ jobs:
 
   build-with-latest:
     needs: detect
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(format('["ubuntu-latest"{0}{1}]', inputs.windows && ', "windows-latest"' || '', inputs.macos && ', "macos-latest"' || '')) }}
     uses: ./.github/workflows/compile-and-test.yaml
     secrets: inherit
     with:
       ghc: ${{ inputs.ghc-latest }}
       skip-doctest: ${{ !inputs.doctest }}
       test-options: ${{ inputs.test-options }}
+      os: ${{ matrix.os }}
 
   format:
     if: github.event_name == 'push'

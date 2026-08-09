@@ -40,13 +40,14 @@ on:
           "mypackage:internal".
         type: string
         default: ""
+      os:
+        description: Runner image to build and test on (e.g. "ubuntu-latest", "windows-latest", "macos-latest").
+        type: string
+        default: ubuntu-latest
 
 jobs:
   compile-and-test:
-    strategy:
-      fail-fast: false
-
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.os }}
 
     steps:
       - uses: actions/checkout@v6
@@ -55,7 +56,7 @@ jobs:
         uses: actions/cache/restore@v5
         id: ghcup-cache
         with:
-          path: ~/.ghcup
+          path: ${{ runner.os == 'Windows' && 'C:\ghcup' || '~/.ghcup' }}
           key: ${{ runner.os }}-ghcup-${{ inputs.ghc }}
 
       - name: Set up build tools
@@ -68,7 +69,7 @@ jobs:
         uses: actions/cache/save@v5
         if: ${{ steps.ghcup-cache.outputs.cache-hit != 'true' }}
         with:
-          path: ~/.ghcup
+          path: ${{ runner.os == 'Windows' && 'C:\ghcup' || '~/.ghcup' }}
           key: ${{ steps.ghcup-cache.outputs.cache-primary-key }}
 
       - name: Configure
