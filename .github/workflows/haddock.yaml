@@ -93,7 +93,13 @@ jobs:
         run: |
           set -euo pipefail
           package="${{ steps.package.outputs.name }}"
-          haddock_dir=$(find dist-newstyle -type d -path "*/doc/html/$package" -print -quit)
+          # Exclude "*/l/<sublib>/doc/html/$package" matches: a package with
+          # internal sub-libraries gets one such dir per sub-library, none of
+          # which carry an index.html, and a plain "-path '*/doc/html/$package'"
+          # would nondeterministically pick one of those instead of the public
+          # library's doc dir (which sits directly under the package id, with
+          # no "/l/" component in its path).
+          haddock_dir=$(find dist-newstyle -type d -path "*/doc/html/$package" -not -path "*/l/*" -print -quit)
           if [ -z "$haddock_dir" ]; then
             echo "ERROR: could not locate Haddock output for package '$package'" >&2
             exit 1
