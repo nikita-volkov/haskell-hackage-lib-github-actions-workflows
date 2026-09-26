@@ -84,10 +84,19 @@ jobs:
 
       - name: Install dependencies
         shell: bash
-        run: >
-          cabal build all --only-dependencies
-          ${{ !inputs.skip-tests && '--enable-tests' || '' }}
-          -j +RTS -A128m -n2m -N -RTS -O0 --ghc-options="-j ${{ inputs.ghc-options }}"
+        # Retried because cabal's parallel dependency builds intermittently fail on
+        # Windows with a "permission denied" error while cleaning up a dependency's
+        # unpacked source directory (a file in it is still momentarily locked by
+        # another process). Retrying re-resolves against the already-built store, so
+        # completed dependencies aren't rebuilt.
+        run: |
+          for attempt in 1 2 3; do
+            cabal build all --only-dependencies \
+              ${{ !inputs.skip-tests && '--enable-tests' || '' }} \
+              -j +RTS -A128m -n2m -N -RTS -O0 --ghc-options="-j ${{ inputs.ghc-options }}" \
+              && break \
+              || { echo "Attempt $attempt failed"; [ "$attempt" = 3 ] && exit 1; sleep 5; }
+          done
 
       - name: Install doctest
         if: ${{ !inputs.skip-doctest && !inputs.skip-tests }}
