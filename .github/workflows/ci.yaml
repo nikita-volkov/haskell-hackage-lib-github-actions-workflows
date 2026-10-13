@@ -23,6 +23,10 @@ on:
         description: Extra options passed to the test suite on the latest build.
         type: string
         default: ""
+      test-timeout-minutes:
+        description: Maximum number of minutes the test step of any build may run before it is cancelled and fails. Bounds a hanging test suite.
+        type: number
+        default: 60
       windows:
         description: Also build the latest GHC on Windows (in addition to Linux). Tests on Windows are controlled by `test-on-windows`.
         type: boolean
@@ -74,6 +78,7 @@ jobs:
       ghc: ${{ inputs.ghc-oldest }}
       skip-benchmarks: true
       skip-doctest: true
+      test-timeout-minutes: ${{ inputs.test-timeout-minutes }}
 
   build-with-latest-linux:
     needs: detect
@@ -84,6 +89,7 @@ jobs:
       os: ubuntu-latest
       skip-doctest: ${{ !inputs.doctest }}
       test-options: ${{ inputs.test-options }}
+      test-timeout-minutes: ${{ inputs.test-timeout-minutes }}
 
   build-with-latest-windows:
     needs: detect
@@ -96,6 +102,7 @@ jobs:
       skip-tests: ${{ !inputs.test-on-windows }}
       skip-doctest: ${{ !inputs.doctest }}
       test-options: ${{ inputs.test-options }}
+      test-timeout-minutes: ${{ inputs.test-timeout-minutes }}
 
   build-with-latest-macos:
     needs: detect
@@ -108,6 +115,7 @@ jobs:
       skip-tests: ${{ !inputs.test-on-macos }}
       skip-doctest: ${{ !inputs.doctest }}
       test-options: ${{ inputs.test-options }}
+      test-timeout-minutes: ${{ inputs.test-timeout-minutes }}
 
   format:
     if: github.event_name == 'push'

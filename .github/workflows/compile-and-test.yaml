@@ -15,6 +15,13 @@ on:
         description: Extra CLI options to pass to the test suite.
         type: string
         default: ""
+      test-timeout-minutes:
+        description: >
+          Maximum number of minutes the test step may run before it is cancelled and
+          fails. Bounds a hanging test suite, which GitHub Actions would otherwise let
+          run for six hours without producing a log that can be read.
+        type: number
+        default: 60
       cabal-configure-extra-args:
         description: Extra arguments to pass to cabal configure. For example, "--constraint=\"text < 2\"".
         type: string
@@ -115,6 +122,7 @@ jobs:
 
       - name: Test
         if: ${{ !inputs.skip-tests }}
+        timeout-minutes: ${{ inputs.test-timeout-minutes }}
         shell: bash
         run: >
           cabal test all --test-show-details streaming -j
