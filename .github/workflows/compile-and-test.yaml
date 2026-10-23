@@ -60,6 +60,20 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Select the Command Line Tools linker
+        if: ${{ runner.os == 'macOS' }}
+        shell: bash
+        # The macos-26 image pairs the Command Line Tools SDK with the default Xcode's
+        # older ld, which rejects the SDK's .tbd stubs ("unknown architecture
+        # arm64e.x1"), so every GHC link fails. Selecting the Command Line Tools makes
+        # ld match the SDK. See https://github.com/actions/runner-images/issues/14940.
+        run: |
+          if [ -d /Library/Developer/CommandLineTools ]; then
+            sudo xcode-select -s /Library/Developer/CommandLineTools
+          fi
+          xcode-select -p
+          ld -v
+
       - name: Set up build tools
         id: setup
         uses: haskell-actions/setup@v2
